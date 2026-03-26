@@ -135,3 +135,51 @@ This page lists the supported operating systems and architectures for Wazuh Serv
 |Rocky Linux|10|✔️|✔️|
 |Rocky Linux|9|✔️|✔️|
 |Rocky Linux|8|✔️|✔️|
+
+---
+
+## Package Download
+
+Wazuh packages are available in different repositories depending on the release stage:
+
+### Development packages
+
+Development packages are available in the internal development bucket:
+
+```bash
+# Development bucket structure
+s3://xdrsiem-packages-dev-internal/development/wazuh/5.x/main/packages/
+
+# Example download
+aws s3 cp s3://xdrsiem-packages-dev-internal/development/wazuh/5.x/main/packages/wazuh-manager_<version>_<arch>.deb .
+```
+
+### Pre-release packages (5.x and later)
+
+Pre-release packages for version 5.x and later are available in the staging bucket:
+
+```bash
+# Pre-release bucket structure
+s3://xdrsiem-packages-staging/pre-release/5.x/
+
+# Example download
+aws s3 cp s3://xdrsiem-packages-staging/pre-release/5.x/wazuh-manager_<version>_<arch>.deb .
+```
+
+### Production packages (5.x and later)
+
+Production packages for version 5.x and later are available in the production bucket:
+
+```bash
+# Production bucket structure
+s3://xdrsiem-packages/production/5.x/
+
+# Example download
+aws s3 cp s3://xdrsiem-packages/production/5.x/wazuh-manager_<version>_<arch>.deb .
+```
+
+**Note**: Replace `<version>` with the target version (e.g., `5.0.0-1`) and `<arch>` with your architecture (e.g., `amd64`, `x86_64`, `aarch64`, `arm64`). Adjust the package name and file extension for your component and platform:
+
+- **Manager**: `wazuh-manager` (`.deb`, `.rpm`)
+- **Agent**: `wazuh-agent` (`.deb`, `.rpm`, `.pkg`, `.msi`)
+- **Architectures**: `amd64`/`x86_64` (64-bit Intel/AMD), `aarch64`/`arm64` (64-bit ARM)
