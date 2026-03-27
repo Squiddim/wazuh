@@ -471,16 +471,17 @@ bool AgentSyncProtocol::sendStartAndWaitAck(Mode mode,
         // Translate DB mode to Schema mode
         const auto protocolMode = toProtocolMode(mode);
 
-        // Try to get metadata from provider - fail if not available
-        has_metadata = (metadata_provider_get(&metadata) == 0);
-
-        // If metadata not available, abort synchronization
-        if (!has_metadata)
+        // Wait until metadata is available or stop is requested
+        while ((has_metadata = (metadata_provider_get(&metadata) == 0)) == false)
         {
-            m_logger(LOG_WARNING,
-                     "Metadata not available from provider. Agent-info may not be initialized yet. Cannot proceed with "
-                     "synchronization.");
-            return false;
+            if (m_stopRequested.load(std::memory_order_acquire))
+            {
+                return false;
+            }
+
+            m_logger(LOG_DEBUG,
+                     "Metadata not available from provider. Agent-info may not be initialized yet. Waiting...");
+            std::this_thread::sleep_for(std::chrono::seconds(1));
         }
 
         // Create groups vector from metadata
