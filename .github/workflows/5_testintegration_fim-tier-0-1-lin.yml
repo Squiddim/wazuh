@@ -137,13 +137,6 @@ jobs:
             { print }
           ' /var/ossec/etc/ossec.conf > /tmp/ossec.conf.fixed && sudo mv /tmp/ossec.conf.fixed /var/ossec/etc/ossec.conf
 
-          sudo awk '
-            /<sca>/ { in_block=1; next }
-            /<\/sca>/ && in_block { in_block=0; next }
-            in_block { next }
-            { print }
-          ' /var/ossec/etc/ossec.conf > /tmp/ossec.conf.fixed && sudo mv /tmp/ossec.conf.fixed /var/ossec/etc/ossec.conf
-
           echo "AFTER"
 
           sudo cat /var/ossec/etc/ossec.conf
