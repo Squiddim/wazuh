@@ -454,6 +454,96 @@ TEST_F(AgentSyncProtocolTest, SynchronizeModuleSendStartFails)
     EXPECT_FALSE(result);
 }
 
+TEST_F(AgentSyncProtocolTest, SendStartWaitsUntilMetadataAvailable)
+{
+    mockQueue = std::make_shared<MockPersistentQueue>();
+    MQ_Functions mqFuncs =
+    {
+        .start = [](const char*, short int, short int) { return 0; },
+        .send_binary = [](int, const void*, size_t, const char*, char) { return 0; }
+    };
+    LoggerFunc testLogger = [](modules_log_level_t, const std::string&) {};
+    protocol = std::make_unique<AgentSyncProtocol>("test_module", ":memory:", mqFuncs, testLogger,
+                                                   std::chrono::seconds(syncEndDelay), std::chrono::seconds(min_timeout),
+                                                   retries, maxEps, mockQueue);
+
+    protocol->persistDifferenceInMemory("id1", Operation::CREATE, "index1", "data1", 1);
+
+    // Remove metadata so provider returns -1 on the first polls
+    metadata_provider_reset();
+
+    std::atomic<bool> syncDone{false};
+    bool syncResult = true;
+
+    std::thread syncThread([&]()
+    {
+        syncResult = protocol->synchronizeModule(Mode::FULL);
+        syncDone = true;
+    });
+
+    // Let the thread enter the metadata polling loop
+    std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+    EXPECT_FALSE(syncDone.load()) << "Sync should be blocked waiting for metadata";
+
+    // Provide metadata - the polling loop should unblock
+    agent_metadata_t metadata = {};
+    strncpy(metadata.agent_id, "001", sizeof(metadata.agent_id) - 1);
+    strncpy(metadata.agent_name, "test-agent", sizeof(metadata.agent_name) - 1);
+    strncpy(metadata.agent_version, "4.5.0", sizeof(metadata.agent_version) - 1);
+    strncpy(metadata.architecture, "x86_64", sizeof(metadata.architecture) - 1);
+    strncpy(metadata.hostname, "test-host", sizeof(metadata.hostname) - 1);
+    strncpy(metadata.os_name, "Linux", sizeof(metadata.os_name) - 1);
+    strncpy(metadata.os_type, "linux", sizeof(metadata.os_type) - 1);
+    strncpy(metadata.os_platform, "ubuntu", sizeof(metadata.os_platform) - 1);
+    strncpy(metadata.os_version, "5.10", sizeof(metadata.os_version) - 1);
+    char* groups[] = {const_cast<char*>("group1")};
+    metadata.groups = groups;
+    metadata.groups_count = 1;
+    metadata_provider_update(&metadata);
+
+    // Sync proceeds, sends Start, and eventually times out waiting for StartAck
+    syncThread.join();
+
+    EXPECT_TRUE(syncDone.load());
+    EXPECT_FALSE(syncResult); // Times out on StartAck, but it did get past the metadata wait
+}
+
+TEST_F(AgentSyncProtocolTest, SendStartAbortedOnStopWhileWaitingForMetadata)
+{
+    mockQueue = std::make_shared<MockPersistentQueue>();
+    MQ_Functions mqFuncs =
+    {
+        .start = [](const char*, short int, short int) { return 0; },
+        .send_binary = [](int, const void*, size_t, const char*, char) { return 0; }
+    };
+    LoggerFunc testLogger = [](modules_log_level_t, const std::string&) {};
+    protocol = std::make_unique<AgentSyncProtocol>("test_module", ":memory:", mqFuncs, testLogger,
+                                                   std::chrono::seconds(syncEndDelay), std::chrono::seconds(min_timeout),
+                                                   retries, maxEps, mockQueue);
+
+    protocol->persistDifferenceInMemory("id1", Operation::CREATE, "index1", "data1", 1);
+
+    // Remove metadata so provider returns -1 indefinitely
+    metadata_provider_reset();
+
+    bool syncResult = true;
+
+    std::thread syncThread([&]()
+    {
+        syncResult = protocol->synchronizeModule(Mode::FULL);
+    });
+
+    // Let the thread enter the metadata polling loop
+    std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+
+    // Request stop - the polling loop should detect it and exit
+    protocol->stop();
+
+    syncThread.join();
+
+    EXPECT_FALSE(syncResult);
+}
+
 TEST_F(AgentSyncProtocolTest, SynchronizeModuleStartFailDueToManager)
 {
     mockQueue = std::make_shared<MockPersistentQueue>();
